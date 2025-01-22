@@ -2,81 +2,128 @@ from typing import Any
 
 import numpy as np
 import torch
+from rich import print
 from rich.progress import track
 from torch.utils.data import DataLoader
 
 from .dataset import TrainAlphaDataset
-from .utils.utils import rolling
+from .utils.utils import EarlyStopping
 
 
 class Trainer:
-    def __init__(self, model: Any, criterion: Any) -> None:
+    def __init__(
+        self,
+        model: Any,
+        model_type: str,
+        criterion: Any,
+        device: str,
+        model_path: str
+    ) -> None:
         self.model = model
+        self.model_type = model_type
         self.criterion = criterion
+        self.device = device
+        self.model_path = model_path
         self.buffer = None
+        self.patience = 10
+        self.verbose = True
 
-    def train(self, n_epochs: int, train_loader: DataLoader, optimizer: Any) -> None:
-        for epoch in track(range(n_epochs), description="Training..."):
+    def multi_asset_train(
+        self, n_epochs: int, train_loader: DataLoader, optimizer: Any
+    ) -> None:
+        early_stopping = EarlyStopping(
+            model_path=self.model_path,
+            patience=self.patience,
+            verbose=self.verbose
+        )
+        for epoch in track(range(n_epochs)):
             epoch_loss = 0
             self.model.train(True)
 
-            for feature, label in train_loader:
-                feature, label = feature.to(torch.float32).squeeze(0), label.to(
-                    torch.float32
-                )
-                optimizer.zero_grad()
-                y_pred = self.model(feature).transpose(0, 1)
+            for _, (feature, label) in enumerate(train_loader):
+                if self.model_type == "attention":
+                    feature, label = feature.to(torch.float32), label.to(torch.float32)
+                else:
+                    feature, label = feature.to(torch.float32).squeeze(0), label.to(
+                        torch.float32
+                    ).squeeze(0)
+
+                feature, label = feature.to(self.device), label.to(self.device)
+                y_pred = self.model(feature)
                 loss = self.criterion(y_pred, label)
+
                 loss.backward()
-                optimizer.step()
                 epoch_loss += loss.item()
+                optimizer.step()
+                optimizer.zero_grad()
 
-            print(f"Epoch {epoch} | Train Loss: {epoch_loss / len(train_loader)}")
+            early_stopping(epoch_loss / len(train_loader), self.model)
 
-    def test(self, test_features: torch.Tensor, test_label: torch.Tensor) -> float:
+            if epoch % 10 == 0:
+                print(f"Epoch {epoch} | Train Loss: {epoch_loss / len(train_loader)}")
+
+            if early_stopping.early_stop:
+                print("Early stopping")
+                break
+
+    def multi_asset_test(
+        self, test_features: torch.Tensor, test_label: torch.Tensor
+    ) -> float:
+        if self.model_type == "attention":
+            test_features, test_label = (
+                torch.tensor(test_features, dtype=torch.float32).unsqueeze(0),
+                torch.tensor(test_label, dtype=torch.float32).unsqueeze(0),
+            )
+        else:
+            test_features, test_label = (
+                torch.tensor(test_features, dtype=torch.float32),
+                torch.tensor(test_label, dtype=torch.float32),
+            )
         with torch.no_grad():
             self.model.train(False)
             y_pred = self.model(test_features)
-            corr = (
-                -1
-                * self.criterion(
-                    y_pred.transpose(0, 1), test_label.transpose(0, 1)
-                ).item()
-            )
+            corr = -1 * self.criterion(y_pred, test_label).item()
 
         return corr
 
     def trade_pipeline(
         self,
         threshold: float,
-        init_buffer: torch.Tensor,
-        full_test_feat: torch.Tensor,
-        full_test_label: torch.Tensor,
+        buffer_feat: np.ndarray,
+        buffer_label: np.ndarray,
+        full_test_feat: np.ndarray,
+        full_test_label: np.ndarray,
         look_back_window: int,
         n_epochs: int,
         optimizer: Any,
     ) -> None:
-        self.buffer = init_buffer
-
+        """
+        buffer_feat (np.ndarray): original training dataset (n_days - look_back_window - 1, n_stock, n_feats * look_back_window)
+        buffer_label (np.ndarray): original training label (n_days - look_back_window - 1, n_stock, 1)
+        full_test_feat (np.ndarray): rolled test dataset (n_days - look_back_window - 1, n_stock, n_feats * look_back_window)
+        full_test_label (np.ndarray): rolled test label (n_days - look_back_window - 1, n_stock, 1)
+        """
         for feats, label in zip(full_test_feat, full_test_label):
-            label = label.unsqueeze(-1)
-            corr = self.test(feats, label)
+            corr = self.multi_asset_test(feats, label)
 
             if np.abs(corr) > threshold:
                 print(f"Alpha still effective, continue trading | corr = {corr}")
-                self.buffer = torch.concat(
-                    [self.buffer[look_back_window:, :], torch.concat([feats, label], dim=1)],
-                    dim=0
+                buffer_feat = np.concatenate(
+                    [buffer_feat[1:], np.expand_dims(feats, axis=0)],
+                    axis=0,
+                )
+                buffer_label = np.concatenate(
+                    [buffer_label[1:], np.expand_dims(label, axis=0)],
+                    axis=0,
                 )
 
             else:
                 print(
                     f"Alpha is no longer effective, retrain model with new data | corr = {corr}"
                 )
-                print(f"Buffer size: {len(self.buffer)}")
+                print(f"Buffer size: {len(buffer_feat)}")
 
-                window_data = rolling(self.buffer, look_back_window)
-                buffer_dataset = TrainAlphaDataset(window_data)
+                buffer_dataset = TrainAlphaDataset(buffer_feat, buffer_label)
                 buffer_loader = DataLoader(buffer_dataset, batch_size=1, shuffle=True)
                 self.model._reset_parameters()
-                self.train(n_epochs, buffer_loader, optimizer)
+                self.multi_asset_train(n_epochs, buffer_loader, optimizer)
