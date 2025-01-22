@@ -10,13 +10,13 @@ class PortfolioFormer:
         look_back_window: int,
         shortest_seq: int,
         future_window: int,
-        stock_conf
+        num_stocks: int,
     ) -> None:
         self.train_scale = train_scale
         self.look_back_window = look_back_window
         self.shortest_seq = shortest_seq
         self.future_window = future_window
-        self.stock_conf = stock_conf
+        self.num_stocks = num_stocks
 
     def get_returns(self, stock_dict: dict) -> List[np.ndarray]:
         return_matrix_list = []
@@ -29,7 +29,7 @@ class PortfolioFormer:
             if i + self.future_window > self.shortest_seq:
                 break
 
-            return_matrix = np.zeros((self.future_window, len(self.stock_conf.for_expr)))
+            return_matrix = np.zeros((self.future_window, self.num_stocks))
 
             for j, (_, stock_df) in enumerate(stock_dict.items()):
                 return_matrix[:, j] = stock_df.iloc[i: i + self.future_window]["ret"].values
@@ -55,7 +55,7 @@ class PortfolioFormer:
         n_days = len(return_matrix_list)
         long_returns = np.zeros((n_days, self.future_window, long_num))
         short_returns = np.zeros((n_days, self.future_window, short_num))
-        bench_returns = np.zeros((n_days, self.future_window, len(self.stock_conf.for_expr)))
+        bench_returns = np.zeros((n_days, self.future_window, self.num_stocks))
 
         for day in range(n_days):
             top_k_indices = sorted_pred_indices[day][-long_num:]
