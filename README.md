@@ -24,6 +24,15 @@ pip install -r requirements.txt
 
 ## Usage
 
+### Download data
+
+```bash
+chmod +x scripts/prepare_data.sh
+bash scripts/prepare_data.sh
+```
+
+If successful, you should see `data/tw_stock_data` and there should be tons of `.csv` files inside.
+
 ### Execute training script
 
 ```bash

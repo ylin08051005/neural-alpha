@@ -4,6 +4,9 @@
 # notebooks
 notebooks/
 
+# data
+data/tw_stock_data/
+
 # Python-generated files
 __pycache__/
 *.py[oc]

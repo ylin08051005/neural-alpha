@@ -6,6 +6,8 @@ antlr4-python3-runtime==4.9.3
     # via omegaconf
 asttokens==3.0.0
     # via stack-data
+beautifulsoup4==4.12.3
+    # via gdown
 certifi==2024.12.14
     # via
     #   requests
@@ -34,12 +36,15 @@ executing==2.1.0
     # via stack-data
 filelock==3.17.0
     # via
+    #   gdown
     #   torch
     #   triton
 fonttools==4.55.4
     # via matplotlib
 fsspec==2024.12.0
     # via torch
+gdown==5.2.0
+    # via neural-alpha (pyproject.toml)
 gitdb==4.0.12
     # via gitpython
 gitpython==3.1.44
@@ -163,6 +168,8 @@ pygments==2.19.1
     #   rich
 pyparsing==3.2.1
     # via matplotlib
+pysocks==1.7.1
+    # via requests
 python-dateutil==2.9.0.post0
     # via
     #   jupyter-client
@@ -179,7 +186,9 @@ pyzmq==26.2.0
     #   ipykernel
     #   jupyter-client
 requests==2.32.3
-    # via wandb
+    # via
+    #   gdown
+    #   wandb
 rich==13.9.4
     # via neural-alpha (pyproject.toml)
 sentry-sdk==2.20.0
@@ -196,6 +205,8 @@ six==1.17.0
     #   python-dateutil
 smmap==5.0.2
     # via gitdb
+soupsieve==2.6
+    # via beautifulsoup4
 stack-data==0.6.3
     # via ipython
 sympy==1.13.3
@@ -207,7 +218,9 @@ tornado==6.4.2
     #   ipykernel
     #   jupyter-client
 tqdm==4.67.1
-    # via neural-alpha (pyproject.toml)
+    # via
+    #   neural-alpha (pyproject.toml)
+    #   gdown
 traitlets==5.14.3
     # via
     #   comm
