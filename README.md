@@ -35,16 +35,33 @@ If successful, you should see `data/tw_stock_data` and there should be tons of `
 
 ### Execute training script
 
+If using symbolic link
+
 ```bash
 python -m src.main \
-    --symlink_path "data/symlink"
-    --quick_expr
-    --train_scale 500
-    --look_back_window 60
-    --direction pos
-    --label_type cumret
-    --future_window 20
-    --n_epochs 100
+    --symlink_path data/symlink \
+    --quick_expr \
+    --train_scale 500 \
+    --look_back_window 60 \
+    --direction pos \
+    --label_type cumret \
+    --future_window 20 \
+    --n_epochs 100 \
+    --batch_size 1
+```
+
+If not
+
+```bash
+python -m src.main \
+    --folder_path data/tw_stock_data \
+    --quick_expr \
+    --train_scale 500 \
+    --look_back_window 60 \
+    --direction pos \
+    --label_type cumret \
+    --future_window 20 \
+    --n_epochs 100 \
     --batch_size 1
 ```
 

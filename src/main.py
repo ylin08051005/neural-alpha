@@ -19,7 +19,8 @@ from .utils.utils import dict2mat, seed_all, rolling
 
 def get_args() -> Namespace:
     parser = ArgumentParser()
-    parser.add_argument("--symlink_path", type=str, default="data/symlink")
+    parser.add_argument("--symlink_path", type=str)
+    parser.add_argument("--folder_path", type=str)
     parser.add_argument("--gpuid", type=int, default=0)
     parser.add_argument("--quick_expr", action="store_true")
     parser.add_argument("--train_scale", type=int, default=250)
@@ -53,7 +54,12 @@ def main(args: Namespace) -> None:
     print(args.__dict__)
     stock_conf = OmegaConf.load("config/selected_stocks.yaml")
     seed_all(2025)
-    folder_path = os.readlink(args.symlink_path)
+
+    if args.symlink_path:
+        folder_path = os.readlink(args.symlink_path)
+    else:
+        folder_path = args.folder_path
+
     device = f"cuda:{args.gpuid}" if torch.cuda.is_available() else "cpu"
     stock = {}
 
