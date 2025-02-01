@@ -49,14 +49,16 @@ class WeightValue(nn.Module):
         weight_type: Literal["vanilla", "two_layer", "time_mixer"],
         input_dim: int,
         hidden_dim: Optional[int],
+        final_output_dim: int = 1,
     ) -> None:
         super().__init__()
         self.weight_type = weight_type
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
+        self.final_output_dim = final_output_dim
 
         if weight_type == "vanilla":
-            self.model = nn.Linear(input_dim, 1)
+            self.model = nn.Linear(input_dim, final_output_dim)
         if hidden_dim:
             if weight_type == "two_layer":
                 self.model = nn.Sequential(
@@ -64,7 +66,7 @@ class WeightValue(nn.Module):
                     nn.ReLU(),
                     nn.LayerNorm(hidden_dim),
                     nn.Dropout(0.1),
-                    nn.Linear(hidden_dim, 1),
+                    nn.Linear(hidden_dim, final_output_dim),
                 )
             elif weight_type == "time_mixer":
                 raise NotImplementedError("TimeMixer is not implemented yet")
@@ -82,6 +84,7 @@ class AlphaSelfAttention(nn.Module):
         dropout: float = 0.0,
         kdim: Optional[int] = None,
         vdim: Optional[int] = None,
+        final_output_dim: int = 1,
         device: Optional[str] = None,
         dtype: Optional[torch.dtype] = None,
         value_weight_type: Literal["vanilla", "two_layer", "time_mixer"] = "vanilla",
@@ -97,6 +100,7 @@ class AlphaSelfAttention(nn.Module):
         self.embed_dim = embed_dim
         self.kdim = kdim if kdim is not None else embed_dim
         self.vdim = vdim if vdim is not None else embed_dim
+        self.final_output_dim = final_output_dim
         self._qkv_same_embed_dim = self.kdim == embed_dim and self.vdim == embed_dim
         self.dropout = dropout
         self.device = device
@@ -108,8 +112,10 @@ class AlphaSelfAttention(nn.Module):
         ), "embed_dim must be divisible by num_heads"
 
         self.w_q = nn.Linear(input_dim, embed_dim)
-        self.w_k = nn.Linear(input_dim, embed_dim)
-        self.w_v = WeightValue(value_weight_type, input_dim, vdim)
+        self.w_k = nn.Linear(input_dim, self.kdim)
+        self.w_v = WeightValue(
+            value_weight_type, input_dim, self.vdim, final_output_dim
+        )
         self.attn_drop = nn.Dropout(dropout)
 
     def _reset_parameters(self):
@@ -118,7 +124,7 @@ class AlphaSelfAttention(nn.Module):
                 layer.reset_parameters()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        batch_size, num_patch, input_dim = x.shape
+        batch_size, num_patch, _ = x.shape
         query = (
             self.w_q(x)
             .reshape(batch_size, num_patch, self.num_heads, self.head_dim)
@@ -131,7 +137,7 @@ class AlphaSelfAttention(nn.Module):
         )
         value = (
             self.w_v(x)
-            .reshape(batch_size, num_patch, self.num_heads, 1)
+            .reshape(batch_size, num_patch, self.num_heads, self.final_output_dim)
             .permute(0, 2, 1, 3)
         )
 
@@ -143,7 +149,7 @@ class AlphaSelfAttention(nn.Module):
         alpha_rank = (
             torch.matmul(attn_score, value)
             .transpose(1, 2)
-            .reshape(batch_size, num_patch, 1)
+            .reshape(batch_size, num_patch, self.final_output_dim)
         )
 
         return alpha_rank

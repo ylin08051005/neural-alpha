@@ -1,0 +1,5 @@
+project_name: "neural_alpha"
+run_name: "20_stock_tr_500_lbw_60_spearman"
+lr: 0.0001
+batch_size: 1
+epochs: 100

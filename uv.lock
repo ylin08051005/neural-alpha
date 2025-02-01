@@ -855,6 +855,7 @@ dependencies = [
     { name = "rich" },
     { name = "setuptools" },
     { name = "torch" },
+    { name = "torchvision" },
     { name = "tqdm" },
     { name = "wandb" },
 ]
@@ -871,6 +872,7 @@ requires-dist = [
     { name = "rich", specifier = ">=13.9.4" },
     { name = "setuptools", specifier = ">=75.7.0" },
     { name = "torch", specifier = "==2.1" },
+    { name = "torchvision", specifier = ">=0.16.0" },
     { name = "tqdm", specifier = ">=4.67.1" },
     { name = "wandb", specifier = ">=0.19.3" },
 ]
@@ -1727,6 +1729,29 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/74/07/edce54779f5c3fe8ab8390eafad3d7c8190fce68f922a254ea77f4a94a99/torch-2.1.0-cp311-cp311-win_amd64.whl", hash = "sha256:5c3bfa91ce25ba10116c224c59d5b64cdcce07161321d978bd5a1f15e1ebce72", size = 192334326 },
     { url = "https://files.pythonhosted.org/packages/16/dd/1bf10180ba812afa1aa7427466083d731bc37b9a1157ec929d0cfeef87eb/torch-2.1.0-cp311-none-macosx_10_9_x86_64.whl", hash = "sha256:601b0a2a9d9233fb4b81f7d47dca9680d4f3a78ca3f781078b6ad1ced8a90523", size = 146687601 },
     { url = "https://files.pythonhosted.org/packages/7b/7c/4d8728e6f8dbe2b8af054bd92c290d94c633270443514e3ee4b768125cf9/torch-2.1.0-cp311-none-macosx_11_0_arm64.whl", hash = "sha256:3cd1dedff13884d890f18eea620184fb4cd8fd3c68ce3300498f427ae93aa962", size = 59554546 },
+]
+
+[[package]]
+name = "torchvision"
+version = "0.16.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+    { name = "pillow" },
+    { name = "requests" },
+    { name = "torch" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/76/89/0cdc6f497cbbb83dd51804cd4f788b7f5bd529f07b5417b50fe9c5655b76/torchvision-0.16.0-cp310-cp310-macosx_10_13_x86_64.whl", hash = "sha256:16c300fdbbe91469f5e9feef8d24c6acabd8849db502a06160dd76ba68e897a0", size = 1705727 },
+    { url = "https://files.pythonhosted.org/packages/de/5c/63da40bcac00e06eae06b52b4a82ba089b44d2cbd232020fe9194ea75ea9/torchvision-0.16.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:ef5dec6c48b715353781b83749efcdea03835720a71b377684453ee117aab3c7", size = 1617103 },
+    { url = "https://files.pythonhosted.org/packages/84/eb/4f6483ae9094e164dc5b9b792e377f7d37823b0bedc3eef3193d416d2bb6/torchvision-0.16.0-cp310-cp310-manylinux1_x86_64.whl", hash = "sha256:9e3a2012e463f498de21f6598cc7a266b9a8c6fe15788472fdc419233ea6f3f2", size = 6920219 },
+    { url = "https://files.pythonhosted.org/packages/82/29/824940e810a81c419a9d35d6c400bd8f99f322878bdd637ac769a597cf0f/torchvision-0.16.0-cp310-cp310-manylinux2014_aarch64.whl", hash = "sha256:e4327e082b703921ae52caeee4f7839f7e6c73cfc5eedea468ecb5c1487ecdbf", size = 14076642 },
+    { url = "https://files.pythonhosted.org/packages/59/af/426c2b90f5c4f8aba778746465af9e662680570e950e02379e91c6138285/torchvision-0.16.0-cp310-cp310-win_amd64.whl", hash = "sha256:62f01513687cce3480df8928fcc6c09b4aa0433d05ac75e82877acc773f6a568", size = 1263025 },
+    { url = "https://files.pythonhosted.org/packages/23/84/46481327771d4f63feb59dd0d9e1cd6a42e985dbd371965f486a5bf9f323/torchvision-0.16.0-cp311-cp311-macosx_10_13_x86_64.whl", hash = "sha256:31fdf289bdfb2976f65a14f79f6ddd1ee60113db34622674918e61521c2dc41f", size = 1705744 },
+    { url = "https://files.pythonhosted.org/packages/dd/48/85ef87f1548620d7c3743cbe135b90d8cf673fc7b8594361917558d765b6/torchvision-0.16.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:2294a6514a31a6fda562288b28cf6db57877237f4b56ff693262f237a7ed4035", size = 1617096 },
+    { url = "https://files.pythonhosted.org/packages/08/aa/033a0a1bca4a3b8f81f97709024e053da37cf5c970f3dc5d76233c920b99/torchvision-0.16.0-cp311-cp311-manylinux1_x86_64.whl", hash = "sha256:6a24a1e83e4bc7a31b39ef05d2ca4cd2182e95ff10f525edffe1473f7ce16ca1", size = 6920174 },
+    { url = "https://files.pythonhosted.org/packages/ab/1a/56e7df23d2ef1526094f7f895f00a2151a67ffa36dfb85d7c24246b25d81/torchvision-0.16.0-cp311-cp311-manylinux2014_aarch64.whl", hash = "sha256:9ed5f21e5a56e466667c6f9f6f93dba2a75e29921108bd70043eaf8e9ba0a7cc", size = 14076642 },
+    { url = "https://files.pythonhosted.org/packages/20/ac/ab6f42af83349e679b03c9bb18354740c6b58b17dba329fb408730230584/torchvision-0.16.0-cp311-cp311-win_amd64.whl", hash = "sha256:9ee3d4df7d4a84f883f8ad11fb6510549f40f68dd5469eae601d7e02fb4809b2", size = 1262967 },
 ]
 
 [[package]]

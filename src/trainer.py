@@ -8,16 +8,12 @@ from torch.utils.data import DataLoader
 
 from .dataset import TrainAlphaDataset
 from .utils.utils import EarlyStopping
+from .model.eval import ndcg
 
 
 class Trainer:
     def __init__(
-        self,
-        model: Any,
-        model_type: str,
-        criterion: Any,
-        device: str,
-        model_path: str
+        self, model: Any, model_type: str, criterion: Any, device: str, model_path: str
     ) -> None:
         self.model = model
         self.model_type = model_type
@@ -27,14 +23,13 @@ class Trainer:
         self.buffer = None
         self.patience = 10
         self.verbose = True
+        self.wandb = None
 
     def multi_asset_train(
         self, n_epochs: int, train_loader: DataLoader, optimizer: Any
     ) -> None:
         early_stopping = EarlyStopping(
-            model_path=self.model_path,
-            patience=self.patience,
-            verbose=self.verbose
+            model_path=self.model_path, patience=self.patience, verbose=self.verbose
         )
         for epoch in track(range(n_epochs)):
             epoch_loss = 0
@@ -51,6 +46,15 @@ class Trainer:
                 feature, label = feature.to(self.device), label.to(self.device)
                 y_pred = self.model(feature)
                 loss = self.criterion(y_pred, label)
+
+                if self.wandb is not None:
+                    self.wandb.log(
+                        {
+                            "epoch": epoch,
+                            "train_loss": loss.item(),
+                            "label_corr": -1 * loss.item(),
+                        }
+                    )
 
                 loss.backward()
                 epoch_loss += loss.item()
@@ -127,3 +131,117 @@ class Trainer:
                 buffer_loader = DataLoader(buffer_dataset, batch_size=1, shuffle=True)
                 self.model._reset_parameters()
                 self.multi_asset_train(n_epochs, buffer_loader, optimizer)
+
+
+class MultiAlphaTrainer:
+    def __init__(
+        self,
+        model: Any,
+        model_type: str,
+        label_loss: Any,
+        pool_loss: Any,
+        device: str,
+        model_path: str,
+    ) -> None:
+        self.model = model
+        self.model_type = model_type
+        self.label_loss = label_loss
+        self.pool_loss = pool_loss
+        self.device = device
+        self.model_path = model_path
+        self.buffer = None
+        self.patience = 10
+        self.verbose = True
+        self.wandb = None
+
+    def multi_asset_train(
+        self,
+        n_epochs: int,
+        train_loader: DataLoader,
+        optimizer: Any,
+        loss_multiplier: float = 1.0,
+        ndcg_k: int = 20,
+    ) -> None:
+        early_stopping = EarlyStopping(
+            model_path=self.model_path, patience=self.patience, verbose=self.verbose
+        )
+        for epoch in track(range(n_epochs)):
+            epoch_loss = 0
+            self.model.train(True)
+
+            for _, (feature, label) in enumerate(train_loader):
+                if self.model_type == "attention":
+                    feature, label = feature.to(torch.float32), label.to(torch.float32)
+                else:
+                    feature, label = feature.to(torch.float32).squeeze(0), label.to(
+                        torch.float32
+                    ).squeeze(0)
+
+                feature, label = feature.to(self.device), label.to(self.device)
+                y_pred = self.model(feature)
+
+                label_losses, mutual_losses = torch.tensor(0.0), torch.tensor(0.0)
+
+                for i in range(y_pred.shape[-1]):
+                    label_loss = self.label_loss(y_pred[:, :, i], label)
+                    label_losses += label_loss
+
+                label_losses /= y_pred.shape[-1]
+
+                for i in range(y_pred.shape[-1]):
+                    for j in range(i + 1, y_pred.shape[-1]):
+                        mutual_loss = self.pool_loss(y_pred[:, i], y_pred[:, j])
+                        mutual_losses += mutual_loss
+
+                mutual_losses /= y_pred.shape[-1] * (y_pred.shape[-1] - 1) / 2
+
+                loss = label_losses + loss_multiplier * mutual_losses
+                top_ndcg = ndcg(y_pred, label, ndcg_k)
+
+                if self.wandb is not None:
+                    self.wandb.log(
+                        {
+                            "epoch": epoch,
+                            "train_loss": loss.item(),
+                            "label_loss": label_losses.item(),
+                            "pool_loss": mutual_losses.item(),
+                            "top_ndcg": top_ndcg,
+                        }
+                    )
+
+                loss.backward()
+                epoch_loss += loss.item()
+                optimizer.step()
+                optimizer.zero_grad()
+
+            early_stopping(epoch_loss / len(train_loader), self.model)
+
+            if epoch % 10 == 0:
+                print(f"Epoch {epoch} | Train Loss: {epoch_loss / len(train_loader)}")
+
+            if early_stopping.early_stop:
+                print("Early stopping")
+                break
+
+    def multi_asset_test(
+        self, test_features: torch.Tensor, test_label: torch.Tensor
+    ) -> float:
+        if self.model_type == "attention":
+            test_features, test_label = (
+                torch.tensor(test_features, dtype=torch.float32).unsqueeze(0),
+                torch.tensor(test_label, dtype=torch.float32).unsqueeze(0),
+            )
+        else:
+            test_features, test_label = (
+                torch.tensor(test_features, dtype=torch.float32),
+                torch.tensor(test_label, dtype=torch.float32),
+            )
+        with torch.no_grad():
+            self.model.train(False)
+            y_pred = self.model(test_features)
+            label_corr = -1 * self.label_loss(y_pred, test_label).item()
+
+        return label_corr
+
+    def trade_pipeline(self, *args):
+        pass
