@@ -2,19 +2,18 @@ import os
 from glob import glob
 from argparse import ArgumentParser, Namespace
 
-import numpy as np
 import pandas as pd
 import torch
 import wandb
 from omegaconf import DictConfig, OmegaConf
 from rich.progress import track
-from torch.utils.data import DataLoader
 
-from .dataset import preprocess, TrainAlphaDataset
+from .dataset import preprocess
 from .trainer import MultiAlphaTrainer
 from .model.nn_model import AlphaSelfAttention
 from .model.loss import ICLoss, InverseICLoss
-from .utils.utils import dict2mat, seed_all, rolling
+from .utils.utils import seed_all
+from .pipeline import Pipeline
 
 
 def get_args() -> Namespace:
@@ -23,16 +22,15 @@ def get_args() -> Namespace:
     parser.add_argument("--folder_path", type=str)
     parser.add_argument("--gpuid", type=int, default=0)
     parser.add_argument("--quick_expr", action="store_true", default=True)
-    parser.add_argument("--train_scale", type=int, default=561)
-    parser.add_argument("--look_back_window", type=int, default=60)
+    parser.add_argument("--train_scale", type=int, default=1500)
+    parser.add_argument("--test_scale", type=int, default=125)
+    parser.add_argument("--prediction_window", type=int, default=5)
     parser.add_argument("--direction", type=str, default="pos")
     parser.add_argument("--label_type", type=str, default="cumret")
-    parser.add_argument("--future_window", type=int, default=5)
     parser.add_argument("--wandb_track", action="store_true")
-    parser.add_argument("--n_epochs", type=int, default=50)
+    parser.add_argument("--n_epochs", type=int, default=100)
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--loss_multiplier", type=float, default=1.0)
-    parser.add_argument("--threshold", type=float, default=0.1)
 
     return parser.parse_args()
 
@@ -50,7 +48,8 @@ def init_wandb(config: DictConfig) -> None:
     )
 
 
-def main(args: Namespace) -> None:
+if __name__ == "__main__":
+    args = get_args()
     print(args.__dict__)
     stock_conf = OmegaConf.load("config/selected_stocks.yaml")
     seed_all(2025)
@@ -86,24 +85,17 @@ def main(args: Namespace) -> None:
     stock_amount = len(subset)
     shortest_sequence = min([len(v) for v in subset.values()])
     preprocessed = preprocess(
-        subset, args.label_type, args.future_window, args.direction
+        subset, args.label_type, args.prediction_window, args.direction
     )
-    first_train, test = dict2mat(preprocessed, args.train_scale, shortest_sequence)
-    first_train = np.transpose(first_train, (1, 0, 2))  # (days, stocks, features)
-    test = np.transpose(test, (1, 0, 2))  # (days, stocks, label)
-
-    tr_window_feat, tr_window_label = rolling(
-        first_train, args.look_back_window
-    )  # (train_scale - lbw - 1, n_stocks, n_feat * lbw), (train_scale - lbw - 1, n_stocks, 1)
-    ts_window_feat, ts_window_label = rolling(test, args.look_back_window)
-    first_train_dataset = TrainAlphaDataset(tr_window_feat, tr_window_label)
-    first_train_loader = DataLoader(
-        first_train_dataset, batch_size=args.batch_size, shuffle=True
+    pipeline = Pipeline(
+        preprocessed,
+        shortest_sequence,
+        args.train_scale,
+        args.test_scale,
+        args.prediction_window,
     )
-
-    # model = NeuralAlpha(tr_window_feat.shape[-1], 128, 1, 0.1).to(device)
     model = AlphaSelfAttention(
-        input_dim=tr_window_feat.shape[-1],
+        input_dim=pipeline.feat_size,
         embed_dim=128,
         num_heads=1,
         dropout=0.1,
@@ -122,8 +114,9 @@ def main(args: Namespace) -> None:
     pool_ic = InverseICLoss(ic_type="spearman")
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
 
-    model_path = f"vanilla_attn_epoch_{args.n_epochs}_bs{args.batch_size}_tr_{args.train_scale}_lbw_{args.look_back_window}_fw_{args.future_window}{args.direction}{args.label_type}.pt"
-    # trainer = Trainer(model, "attention", label_ic, device, model_path)
+    model_path = (
+        f"{args.prediction_window}d_cumret_10_alphas_eta_{args.loss_multiplier}.pt"
+    )
     trainer = MultiAlphaTrainer(
         model,
         model_type="attention",
@@ -136,27 +129,6 @@ def main(args: Namespace) -> None:
     if args.wandb_track:
         trainer.wandb = wandb
 
-    trainer.multi_asset_train(
-        args.n_epochs,
-        first_train_loader,
-        optimizer,
-        loss_multiplier=args.loss_multiplier,
-        ndcg_k=stock_amount,
+    predictions = pipeline.run(
+        model, trainer, model_path, stock_amount, args.loss_multiplier
     )
-
-    test = False
-    if test:
-        trainer.trade_pipeline(
-            args.threshold,
-            tr_window_feat,
-            tr_window_label,
-            ts_window_feat,
-            ts_window_label,
-            args.look_back_window,
-            args.n_epochs,
-            optimizer,
-        )
-
-
-if __name__ == "__main__":
-    main(get_args())

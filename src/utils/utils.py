@@ -88,6 +88,18 @@ def rolling(data: np.ndarray, look_back_window: int) -> Tuple[np.ndarray, np.nda
 def dict2mat(
     data: Dict[str, pd.DataFrame], train_scale: int, shortest_len: int
 ) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Split the data into training and testing sets, which transfer
+    from dictionary to numpy array
+
+    Args:
+        data (dict): Dictionary of stock data
+        train_scale (int): Number of training days
+        shortest_len (int): Shortest length of stock data
+
+    Returns:
+        Tuple[np.ndarray, np.ndarray]: Training and testing sets
+    """
     full_tr_list, full_ts_list = [], []
 
     for _, stock_data in data.items():

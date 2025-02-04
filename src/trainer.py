@@ -71,24 +71,29 @@ class Trainer:
                 break
 
     def multi_asset_test(
-        self, test_features: torch.Tensor, test_label: torch.Tensor
-    ) -> float:
-        if self.model_type == "attention":
-            test_features, test_label = (
-                torch.tensor(test_features, dtype=torch.float32).unsqueeze(0),
-                torch.tensor(test_label, dtype=torch.float32).unsqueeze(0),
-            )
-        else:
-            test_features, test_label = (
-                torch.tensor(test_features, dtype=torch.float32),
-                torch.tensor(test_label, dtype=torch.float32),
-            )
-        with torch.no_grad():
-            self.model.train(False)
-            y_pred = self.model(test_features)
-            corr = -1 * self.criterion(y_pred, test_label).item()
+        self, test_features: torch.Tensor, test_label: torch.Tensor, future_window: int
+    ) -> list:
+        y_preds = []
 
-        return corr
+        for i, (test_features, test_label) in track(enumerate(zip(test_features, test_label))):
+            if i % future_window == 0:
+                if self.model_type == "attention":
+                    test_features, test_label = (
+                        torch.tensor(test_features, dtype=torch.float32).unsqueeze(0),
+                        torch.tensor(test_label, dtype=torch.float32).unsqueeze(0),
+                    )
+                else:
+                    test_features, test_label = (
+                        torch.tensor(test_features, dtype=torch.float32),
+                        torch.tensor(test_label, dtype=torch.float32),
+                    )
+                with torch.no_grad():
+                    self.model.train(False)
+                    y_pred = self.model(test_features)
+
+                y_preds.append(y_pred[0].cpu().numpy())
+
+        return y_preds
 
     def trade_pipeline(
         self,
@@ -108,7 +113,7 @@ class Trainer:
         full_test_label (np.ndarray): rolled test label (n_days - look_back_window - 1, n_stock, 1)
         """
         for feats, label in zip(full_test_feat, full_test_label):
-            corr = self.multi_asset_test(feats, label)
+            corr = self.multi_asset_test(feats, label, 5)
 
             if np.abs(corr) > threshold:
                 print(f"Alpha still effective, continue trading | corr = {corr}")
@@ -167,6 +172,7 @@ class MultiAlphaTrainer:
         )
         for epoch in track(range(n_epochs)):
             epoch_loss = 0
+            epoch_pool_loss, epoch_label_loss = 0, 0
             self.model.train(True)
 
             for _, (feature, label) in enumerate(train_loader):
@@ -198,21 +204,34 @@ class MultiAlphaTrainer:
                 loss = label_losses + loss_multiplier * mutual_losses
                 top_ndcg = ndcg(y_pred, label, ndcg_k)
 
-                if self.wandb is not None:
-                    self.wandb.log(
-                        {
-                            "epoch": epoch,
-                            "train_loss": loss.item(),
-                            "label_loss": label_losses.item(),
-                            "pool_loss": mutual_losses.item(),
-                            "top_ndcg": top_ndcg,
-                        }
-                    )
+                # if self.wandb is not None:
+                #     self.wandb.log(
+                #         {
+                #             "epoch": epoch,
+                #             "epoch_loss": epoch_loss,
+                #             "train_loss": loss.item(),
+                #             "label_loss": label_losses.item(),
+                #             "pool_loss": mutual_losses.item(),
+                #             "top_ndcg": top_ndcg,
+                #         }
+                #     )
 
                 loss.backward()
                 epoch_loss += loss.item()
+                epoch_pool_loss += mutual_losses.item()
+                epoch_label_loss += label_losses.item()
                 optimizer.step()
                 optimizer.zero_grad()
+
+            if self.wandb is not None:
+                self.wandb.log(
+                    {
+                        "epoch": epoch,
+                        "epoch_loss": epoch_loss / len(train_loader),
+                        "pool_loss": epoch_pool_loss / len(train_loader),
+                        "label_loss": epoch_label_loss / len(train_loader),
+                    }
+                )
 
             early_stopping(epoch_loss / len(train_loader), self.model)
 
@@ -224,24 +243,29 @@ class MultiAlphaTrainer:
                 break
 
     def multi_asset_test(
-        self, test_features: torch.Tensor, test_label: torch.Tensor
-    ) -> float:
-        if self.model_type == "attention":
-            test_features, test_label = (
-                torch.tensor(test_features, dtype=torch.float32).unsqueeze(0),
-                torch.tensor(test_label, dtype=torch.float32).unsqueeze(0),
-            )
-        else:
-            test_features, test_label = (
-                torch.tensor(test_features, dtype=torch.float32),
-                torch.tensor(test_label, dtype=torch.float32),
-            )
-        with torch.no_grad():
-            self.model.train(False)
-            y_pred = self.model(test_features)
-            label_corr = -1 * self.label_loss(y_pred, test_label).item()
+        self, test_features: torch.Tensor, test_label: torch.Tensor, future_window: int
+    ) -> list:
+        y_preds = []
 
-        return label_corr
+        for i, (test_features, test_label) in track(enumerate(zip(test_features, test_label))):
+            if i % future_window == 0:
+                if self.model_type == "attention":
+                    test_features, test_label = (
+                        torch.tensor(test_features, dtype=torch.float32).unsqueeze(0),
+                        torch.tensor(test_label, dtype=torch.float32).unsqueeze(0),
+                    )
+                else:
+                    test_features, test_label = (
+                        torch.tensor(test_features, dtype=torch.float32),
+                        torch.tensor(test_label, dtype=torch.float32),
+                    )
+                with torch.no_grad():
+                    self.model.train(False)
+                    y_pred = self.model(test_features)
+
+                y_preds.append(y_pred[0].cpu().numpy())
+
+        return y_preds
 
     def trade_pipeline(self, *args):
         pass

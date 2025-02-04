@@ -48,6 +48,21 @@ def preprocess(
     window: int,
     direction: Literal["pos", "neg"],
 ) -> Dict[str, pd.DataFrame]:
+    """
+    data preprocessor, which includes
+
+    1. calculate daily return
+    2. map labels based on label_type
+
+    Args:
+        data (Dict[str, pd.DataFrame]): stock data
+        label_type (Literal["cumret", "sharpe"]): label type
+        window (int): window size for calculating label
+        direction (Literal["pos", "neg"]): label direction
+
+    Returns:
+        Dict[str, pd.DataFrame]: preprocessed stock data
+    """
     for stock_id, stock_data in track(
         data.items(), description="Preprocessing data..."
     ):
