@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Dict, List
 
 import numpy as np
 import torch
@@ -8,7 +8,6 @@ from torch.utils.data import DataLoader
 
 from .dataset import TrainAlphaDataset
 from .utils.utils import EarlyStopping
-from .model.eval import ndcg
 
 
 class Trainer:
@@ -39,9 +38,10 @@ class Trainer:
                 if self.model_type == "attention":
                     feature, label = feature.to(torch.float32), label.to(torch.float32)
                 else:
-                    feature, label = feature.to(torch.float32).squeeze(0), label.to(
-                        torch.float32
-                    ).squeeze(0)
+                    feature, label = (
+                        feature.to(torch.float32).squeeze(0),
+                        label.to(torch.float32).squeeze(0),
+                    )
 
                 feature, label = feature.to(self.device), label.to(self.device)
                 y_pred = self.model(feature)
@@ -75,7 +75,9 @@ class Trainer:
     ) -> list:
         y_preds = []
 
-        for i, (test_features, test_label) in track(enumerate(zip(test_features, test_label))):
+        for i, (test_features, test_label) in track(
+            enumerate(zip(test_features, test_label))
+        ):
             if i % future_window == 0:
                 if self.model_type == "attention":
                     test_features, test_label = (
@@ -155,7 +157,8 @@ class MultiAlphaTrainer:
         self.device = device
         self.model_path = model_path
         self.buffer = None
-        self.patience = 10
+        self.patience = 100
+        self.current_iteration = None
         self.verbose = True
         self.wandb = None
 
@@ -166,10 +169,11 @@ class MultiAlphaTrainer:
         optimizer: Any,
         loss_multiplier: float = 1.0,
         ndcg_k: int = 20,
-    ) -> None:
+    ) -> Dict[str, List[float]]:
         early_stopping = EarlyStopping(
             model_path=self.model_path, patience=self.patience, verbose=self.verbose
         )
+        train_losses = []
         for epoch in track(range(n_epochs)):
             epoch_loss = 0
             epoch_pool_loss, epoch_label_loss = 0, 0
@@ -179,9 +183,10 @@ class MultiAlphaTrainer:
                 if self.model_type == "attention":
                     feature, label = feature.to(torch.float32), label.to(torch.float32)
                 else:
-                    feature, label = feature.to(torch.float32).squeeze(0), label.to(
-                        torch.float32
-                    ).squeeze(0)
+                    feature, label = (
+                        feature.to(torch.float32).squeeze(0),
+                        label.to(torch.float32).squeeze(0),
+                    )
 
                 feature, label = feature.to(self.device), label.to(self.device)
                 y_pred = self.model(feature)
@@ -202,19 +207,7 @@ class MultiAlphaTrainer:
                 mutual_losses /= y_pred.shape[-1] * (y_pred.shape[-1] - 1) / 2
 
                 loss = label_losses + loss_multiplier * mutual_losses
-                top_ndcg = ndcg(y_pred, label, ndcg_k)
-
-                # if self.wandb is not None:
-                #     self.wandb.log(
-                #         {
-                #             "epoch": epoch,
-                #             "epoch_loss": epoch_loss,
-                #             "train_loss": loss.item(),
-                #             "label_loss": label_losses.item(),
-                #             "pool_loss": mutual_losses.item(),
-                #             "top_ndcg": top_ndcg,
-                #         }
-                #     )
+                # top_ndcg = ndcg(y_pred, label, ndcg_k)
 
                 loss.backward()
                 epoch_loss += loss.item()
@@ -227,9 +220,12 @@ class MultiAlphaTrainer:
                 self.wandb.log(
                     {
                         "epoch": epoch,
-                        "epoch_loss": epoch_loss / len(train_loader),
-                        "pool_loss": epoch_pool_loss / len(train_loader),
-                        "label_loss": epoch_label_loss / len(train_loader),
+                        f"iter_{self.current_iteration}/train/epoch_loss": epoch_loss
+                        / len(train_loader),
+                        f"iter_{self.current_iteration}/train/pool_loss": epoch_pool_loss
+                        / len(train_loader),
+                        f"iter_{self.current_iteration}/train/label_loss": epoch_label_loss
+                        / len(train_loader),
                     }
                 )
 
@@ -242,30 +238,34 @@ class MultiAlphaTrainer:
                 print("Early stopping")
                 break
 
+            train_losses.append(epoch_loss / len(train_loader))
+
+        return {"train_losses": train_losses}
+
     def multi_asset_test(
-        self, test_features: torch.Tensor, test_label: torch.Tensor, future_window: int
-    ) -> list:
+        self, test_loader: DataLoader, model_path: str, future_window: int
+    ) -> np.ndarray:
+        """
+        Args:
+            test_loader (DataLoader) : DataLoader for test dataset
+            model_path (str) : path to save model
+            future_window (int) : number of days to predict in the future
+
+        Returns:
+            y_preds (list): list of predictions, with shape (n_days, n_stock, n_alphas)
+        """
         y_preds = []
 
-        for i, (test_features, test_label) in track(enumerate(zip(test_features, test_label))):
-            if i % future_window == 0:
-                if self.model_type == "attention":
-                    test_features, test_label = (
-                        torch.tensor(test_features, dtype=torch.float32).unsqueeze(0),
-                        torch.tensor(test_label, dtype=torch.float32).unsqueeze(0),
-                    )
-                else:
-                    test_features, test_label = (
-                        torch.tensor(test_features, dtype=torch.float32),
-                        torch.tensor(test_label, dtype=torch.float32),
-                    )
-                with torch.no_grad():
-                    self.model.train(False)
-                    y_pred = self.model(test_features)
+        for features, label in track(test_loader):
+            features, label = (
+                torch.tensor(features, dtype=torch.float32, device=self.model.device),
+                torch.tensor(label, dtype=torch.float32, device=self.model.device),
+            )
 
-                y_preds.append(y_pred[0].cpu().numpy())
+            with torch.no_grad():
+                self.model.train(False)
+                y_pred = self.model(features)
 
-        return y_preds
+            y_preds.append(y_pred[0].cpu().numpy())
 
-    def trade_pipeline(self, *args):
-        pass
+        return np.array(y_preds)

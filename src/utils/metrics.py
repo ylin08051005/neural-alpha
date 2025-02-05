@@ -17,7 +17,7 @@ def sharpe_ratio(ret: Union[pd.Series, np.ndarray, pd.DataFrame], rf: float) -> 
 def get_next_n_day_sharpe(
     sequence: Union[pd.Series, pd.DataFrame],
     window: int,
-    direction: Literal["pos", "neg"]
+    direction: Literal["pos", "neg"],
 ) -> pd.Series:
     sharpe_ratios = [None] * len(sequence)
 
@@ -33,7 +33,7 @@ def get_next_n_day_sharpe(
 def get_next_n_day_cumret(
     sequence: Union[pd.Series, pd.DataFrame],
     window: int,
-    direction: Literal["pos", "neg"]
+    direction: Literal["pos", "neg"],
 ) -> pd.Series:
     avg_rets = [None] * len(sequence)
 

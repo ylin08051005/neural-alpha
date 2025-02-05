@@ -1,4 +1,3 @@
-import os
 import random
 from typing import Any, Dict, Tuple
 
@@ -10,7 +9,9 @@ from .constants import feature_names, label_name
 
 
 class EarlyStopping:
-    def __init__(self, model_path: str, patience: int = 10, verbose: bool = True) -> None:
+    def __init__(
+        self, model_path: str, patience: int = 10, verbose: bool = True
+    ) -> None:
         self.patience = patience
         self.verbose = verbose
         self.model_path = model_path
@@ -30,9 +31,7 @@ class EarlyStopping:
             self.counter += 1
 
             if self.verbose:
-                print(
-                    f"EarlyStopping counter: {self.counter} out of {self.patience}"
-                )
+                print(f"EarlyStopping counter: {self.counter} out of {self.patience}")
 
             if self.counter >= self.patience:
                 self.early_stop = True

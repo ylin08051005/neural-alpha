@@ -24,7 +24,7 @@ class PortfolioFormer:
         for i in range(
             self.train_scale + self.look_back_window + 1,
             self.shortest_seq,
-            self.future_window
+            self.future_window,
         ):
             if i + self.future_window > self.shortest_seq:
                 break
@@ -32,7 +32,9 @@ class PortfolioFormer:
             return_matrix = np.zeros((self.future_window, self.num_stocks))
 
             for j, (_, stock_df) in enumerate(stock_dict.items()):
-                return_matrix[:, j] = stock_df.iloc[i: i + self.future_window]["ret"].values
+                return_matrix[:, j] = stock_df.iloc[i : i + self.future_window][
+                    "ret"
+                ].values
 
             return_matrix_list.append(return_matrix)
 

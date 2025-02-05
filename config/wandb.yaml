@@ -1,5 +1,5 @@
 project_name: "neural_alpha"
-run_name: "20_stock_tr_1500_spearman"
+run_name: "all_stock_10d_cumret_spearman_batch_128_eta_0.1"
 lr: 0.0001
 batch_size: 1
 epochs: 100

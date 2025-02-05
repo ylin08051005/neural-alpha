@@ -69,7 +69,9 @@ def preprocess(
         stock_data["ret"] = stock_data["收盤價"].pct_change().fillna(0)
         stock_data["date"] = pd.to_datetime(stock_data["date"])
         labeler = label_map(label_type)
-        stock_data["label"] = labeler(stock_data["ret"], window=window, direction=direction)
+        stock_data["label"] = labeler(
+            stock_data["ret"], window=window, direction=direction
+        )
         data[stock_id] = stock_data
 
     return data
